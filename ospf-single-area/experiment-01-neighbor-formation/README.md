@@ -10,6 +10,18 @@ Observe how OSPF neighbors re-establish adjacency after the OSPF process is rese
 
 Three routers form a triangle in OSPF Area 0. R1 connects to R2 over 10.0.12.0/30 and to R3 over 10.0.13.0/30. R2 and R3 connect over 10.0.23.0/30. The loopbacks are R1 1.1.1.1/32, R2 2.2.2.2/32, and R3 3.3.3.3/32.
 
+### R1 OSPF process summary
+
+R1's show ip ospf output identifies process 1 and router ID 1.1.1.1. It reports Area BACKBONE (Area 0), three interfaces in the area including one loopback, and six LSAs.
+
+![R1 show ip ospf process summary](evidence/12-r1-ospf-process-summary.png)
+
+## Steady-state Hello capture
+
+With the adjacency established, the capture shows repeated Hello packets from 10.0.12.1 and 10.0.12.2 to 224.0.0.5. This is the periodic Hello traffic seen before the database synchronization sequence.
+
+![Steady-state OSPF Hello packets between R1 and R2](evidence/11-r1-stable-hello-packets.png)
+
 ## Procedure
 
 The OSPF adjacencies were FULL and connectivity had been verified before the experiment. A packet capture was started on the R1–R2 link, and OSPF adjacency debugging was enabled on R1. The process was then reset:
@@ -44,6 +56,12 @@ OSPF uses five packet types. The packets support neighbor discovery and database
 | **Link State Request (LSR)** | Requests specific LSAs that are missing or need updating. | Sent after database summaries are compared, during the transition to and work within Loading. | R1 requested Type 1 and Type 2 LSAs. |
 | **Link State Update (LSU)** | Delivers requested LSAs and floods updated link-state information. | Used during Loading to complete synchronization and later when updates must be flooded. | R2 sent the requested LSA information; R1's debug recorded receiving an LS Update. |
 | **Link State Acknowledgment (LSAck)** | Confirms receipt of LSAs carried in an update. | Acknowledges reliable LSA delivery; it is not a separate neighbor state. | R1 acknowledged the LSAs in the capture. Database synchronization completed and the adjacency reached Full. |
+
+### Wireshark packet sequence after the process reset
+
+The packet list shows Hello packets from both routers followed by database synchronization traffic: DBD, LS Request, LS Update, and LS Acknowledgment. Later rows also show additional Hellos, updates, and acknowledgments.
+
+![Wireshark OSPF packet sequence after clearing the process](evidence/10-packet-sequence-after-clear.png)
 
 The observed synchronization sequence was:
 
@@ -102,3 +120,4 @@ The final evidence shows both OSPF neighbors in FULL state, OSPF routes installe
 ### Final OSPF database
 
 ![Final OSPF database after convergence](evidence/09-final-ospf-database.png)
+

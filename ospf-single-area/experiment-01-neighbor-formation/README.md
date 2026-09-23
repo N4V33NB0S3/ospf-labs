@@ -1,97 +1,104 @@
-# Experiment 01 — OSPF Neighbor Formation After Process Reset
+# Single-Area OSPF: Neighbor Formation After Process Reset
+
+![Three-router single-area OSPF topology](evidence/topology-three-router-area-0.png)
 
 ## Objective
 
-Observe how Cisco IOS rebuilds OSPF adjacencies after the OSPF process is reset, and correlate the router's adjacency debug output with the packet sequence captured in Wireshark.
+Observe how OSPF neighbors re-establish adjacency after the OSPF process is reset. This experiment correlates Cisco IOS adjacency-debug messages with OSPF packets captured in Wireshark.
 
-This is a three-router, single-area OSPF lab. All links and loopbacks shown in the topology are in Area 0. The captured console evidence is from R1.
+## Topology
 
-## Topology and addressing
+Three routers form a triangle in OSPF Area 0. R1 connects to R2 over 10.0.12.0/30 and to R3 over 10.0.13.0/30. R2 and R3 connect over 10.0.23.0/30. The loopbacks are R1 1.1.1.1/32, R2 2.2.2.2/32, and R3 3.3.3.3/32.
 
-![Three-router Area 0 topology](evidence/topology-three-router-area-0.png)
+## Procedure
 
-| Router | Interface / link | Address shown in the topology |
+The OSPF adjacencies were FULL and connectivity had been verified before the experiment. A packet capture was started on the R1–R2 link, and OSPF adjacency debugging was enabled on R1. The process was then reset:
+
+    R1# clear ip ospf process
+    Reset ALL OSPF processes? [no]: yes
+
+## Observed neighbor-state progression
+
+After the reset, R1 reported both established neighbors moving from FULL to DOWN. As the interfaces returned to OSPF operation, the debug and packet observations showed the neighbors progressing through INIT and 2-Way, followed by database exchange and synchronization.
+
+| Neighbor state | Meaning | Observation in this experiment |
 |---|---|---|
-| R1 | Gi0/0 to R2, 10.0.12.0/30 | 10.0.12.1/30 |
-| R1 | Gi0/1 to R3, 10.0.13.0/30 | 10.0.13.1/30 |
-| R2 | Link to R1, 10.0.12.0/30 | 10.0.12.2/30 |
-| R2 | Link to R3, 10.0.23.0/30 | 10.0.23.2/30 |
-| R3 | Link to R1, 10.0.13.0/30 | 10.0.13.2/30 |
-| R3 | Link to R2, 10.0.23.0/30 | 10.0.23.1/30 |
-| R1 | Loopback0 | 1.1.1.1/32 |
-| R2 | Loopback0 | 2.2.2.2/32 |
-| R3 | Loopback0 | 3.3.3.3/32 |
+| **Down** | No active neighbor relationship is established. | The process reset caused R1's neighbors 2.2.2.2 and 3.3.3.3 to move from FULL to DOWN. |
+| **Init** | A Hello has been received from the neighbor, but two-way communication has not yet been confirmed. | INIT was observed during neighbor discovery after the process restarted. |
+| **2-Way** | Each router has received a Hello that lists its own router ID, confirming two-way communication. | R1's debug reported 2-Way communication with 2.2.2.2 and 3.3.3.3. DR/BDR election information was also logged. |
+| **ExStart** | Routers establish the database-exchange relationship and negotiate DBD sequence details. | The debug and capture show DBD negotiation; R1 is identified as the slave in the displayed exchanges. |
+| **Exchange** | Routers exchange DBD summaries to compare their link-state databases. | DBD packets include Type 1 and Type 2 LSA summary information. R1's debug reports exchange completion. |
+| **Loading** | Routers request and receive LSAs needed to complete database synchronization. | R1 sends LS Requests and receives LS Updates; the debug then reports synchronization. |
+| **Full** | The databases for the adjacency are synchronized. | R1 reports both neighbors synchronized and transitioning from LOADING to FULL. |
 
-## Experiment
+On the R1–R2 link, R1's debug identifies R2 (2.2.2.2) as DR and R1 (1.1.1.1) as BDR. On the R1–R3 link, it identifies R3 (3.3.3.3) as DR and R1 (1.1.1.1) as BDR.
 
-The lab was already configured: OSPF neighbors were FULL and router reachability had been verified. With adjacency debugging active on R1 and a packet capture running on the R1–R2 link, the OSPF process was reset:
+## OSPF packet types and their role in the state progression
 
-```cisco
-R1# clear ip ospf process
-Reset ALL OSPF processes? [no]: yes
-```
+OSPF uses five packet types. The packets support neighbor discovery and database synchronization; the neighbor states describe the progress of the relationship. A packet type is not itself a neighbor state.
 
-The reset was confirmed in the console output. R1 reported its interfaces going down for OSPF and both neighbors, 2.2.2.2 and 3.3.3.3, moving from FULL to DOWN.
+| Packet type | Function | State or stage | Finding from this capture |
+|---|---|---|---|
+| **Hello** | Discovers neighbors, confirms two-way communication, and maintains neighbor relationships. | Used during Down, Init, and 2-Way progression; periodic Hellos continue after adjacency reaches Full. | R1 sent a Hello from 10.0.12.1 to 224.0.0.5. R2 sent a Hello from 10.0.12.2 to 10.0.12.1; the packet showed R2 as DR and R1 as an active neighbor. |
+| **Database Description (DBD)** | Negotiates database exchange and advertises LSA headers for comparison. | ExStart for negotiation; Exchange for database summaries. | Empty DBD packets were captured during negotiation. Subsequent DBDs carried Type 1 and Type 2 LSA summary information. |
+| **Link State Request (LSR)** | Requests specific LSAs that are missing or need updating. | Sent after database summaries are compared, during the transition to and work within Loading. | R1 requested Type 1 and Type 2 LSAs. |
+| **Link State Update (LSU)** | Delivers requested LSAs and floods updated link-state information. | Used during Loading to complete synchronization and later when updates must be flooded. | R2 sent the requested LSA information; R1's debug recorded receiving an LS Update. |
+| **Link State Acknowledgment (LSAck)** | Confirms receipt of LSAs carried in an update. | Acknowledges reliable LSA delivery; it is not a separate neighbor state. | R1 acknowledged the LSAs in the capture. Database synchronization completed and the adjacency reached Full. |
 
-## Observed sequence
+The observed synchronization sequence was:
 
-The capture and console output show the database synchronization sequence that followed the reset:
+    Hello → INIT → 2-Way → DBD negotiation (ExStart) → DBD summaries (Exchange)
+    → LS Request (Loading) → LS Update → LS Acknowledgment → FULL
 
-1. **Hello and neighbor discovery** — R1 and its peers exchanged Hellos. R1's capture showed a Hello from `10.0.12.1` to `224.0.0.5`. The captured R2 Hello was from `10.0.12.2` to `10.0.12.1`; it showed R2 as DR and R1 as an active neighbor.
-2. **ExStart / DBD negotiation** — The routers began Database Description (DBD) exchange. The capture included empty DBD packets used during master/slave negotiation and an initial sequence number. R1's adjacency debug reported that it became the slave in the displayed exchanges.
-3. **Exchange** — DBD packets carried LSA header summaries, including Type 1 (Router) and Type 2 (Network) LSAs. The debug then reported exchange completion with neighbors 2.2.2.2 and 3.3.3.3.
-4. **Loading** — R1 sent LS Requests for Type 1 and Type 2 LSAs. R2 sent the requested LSA information in an LS Update, and R1 sent an LS Acknowledgment.
-5. **FULL** — R1's debug reported synchronization with both neighbors and transitions from LOADING to FULL (Loading Done).
+## Cisco IOS debug observations
 
-```text
-clear ip ospf process
-        ↓
-Neighbor state FULL → DOWN
-        ↓
-Hello / neighbor discovery
-        ↓
-ExStart: DBD master-slave negotiation
-        ↓
-Exchange: DBD LSA summaries
-        ↓
-Loading: LS Request → LS Update → LS Acknowledgment
-        ↓
-Neighbor state FULL
-```
+The R1 adjacency debug provides the router-side view of the packet exchange:
 
-## Cisco debug observations
-
-The adjacency debug provides the router-side view of the same convergence:
-
-- Both adjacencies were reported as FULL to DOWN during the process reset.
-- R1 logged DR/BDR election activity on the links. On the R1–R2 link, the output identifies R2 (2.2.2.2) as DR and R1 (1.1.1.1) as BDR. On the R1–R3 link, it identifies R3 (3.3.3.3) as DR and R1 (1.1.1.1) as BDR.
-- R1 logged DBD negotiation, becoming the slave in the shown exchanges, then building the summary list and completing Exchange.
-- R1 sent LS Requests, received LS Updates, and logged synchronization with both neighbors to FULL.
-
-Evidence: [process reset](evidence/01-clear-ospf-process.png) · [adjacency debug](evidence/02-cisco-ospf-adjacency-debug.png)
-
-## Wireshark findings
-
-| OSPF packet | What the captured evidence shows |
-|---|---|
-| Hello | R1 source 10.0.12.1 to 224.0.0.5; R2 source 10.0.12.2 to 10.0.12.1. The R2 Hello identifies R2 as DR and lists R1 as an active neighbor. |
-| Database Description (DBD) | Empty DBD packets during ExStart negotiation, followed by DBD summaries including Type 1 and Type 2 LSA information during Exchange. |
-| Link State Request | R1 requests Type 1 and Type 2 LSAs. |
-| Link State Update | R2 sends requested LSA information. |
-| Link State Acknowledgment | R1 acknowledges the LSAs. |
-
-Evidence: [DBD exchange](evidence/03-wireshark-dbd-exchange.png) · [LS Request](evidence/04-wireshark-ls-request.png) · [LS Update](evidence/05-wireshark-ls-update.png) · [LS Acknowledgment](evidence/06-wireshark-ls-acknowledgment.png)
+- The process reset took both neighbors from FULL to DOWN.
+- During discovery, R1 logged INIT and 2-Way progression.
+- R1 logged DR/BDR elections on both links.
+- DBD negotiation completed with R1 as slave in the displayed exchanges.
+- R1 reported Exchange completion, sent LS Requests, received LS Updates, and synchronized with both neighbors.
+- The final debug messages show both adjacencies transitioning from LOADING to FULL.
 
 ## Final verification
 
-The saved final-state screenshots show:
+The final evidence shows both OSPF neighbors in FULL state, OSPF routes installed, and the OSPF database populated after convergence.
 
-- R1's OSPF neighbors in FULL state.
-- OSPF-learned routes for the other routers' loopbacks and transit networks.
-- The final OSPF database.
+## Evidence
 
-Evidence: [FULL adjacency](evidence/07-final-full-adjacency.png) · [OSPF routes](evidence/08-final-routing-table.png) · [OSPF database](evidence/09-final-ospf-database.png)
+### OSPF process reset
 
-## Takeaway
+![R1 resets the OSPF process and reports established neighbors going down](evidence/01-clear-ospf-process.png)
 
-`clear ip ospf process` reset the OSPF state and caused the established adjacencies to drop. OSPF then rebuilt neighbor relationships, synchronized database summaries, requested and received missing LSAs, acknowledged the updates, and returned the neighbors to FULL. The Cisco debug and packet capture show complementary views of this process: internal state changes on R1 and the OSPF packets exchanged on the link.
+### Cisco adjacency debug
+
+![Cisco IOS adjacency debug showing neighbor-state progression and database synchronization](evidence/02-cisco-ospf-adjacency-debug.png)
+
+### Database Description packets
+
+![Wireshark capture of OSPF Database Description negotiation and exchange](evidence/03-wireshark-dbd-exchange.png)
+
+### Link State Request
+
+![Wireshark capture of an OSPF Link State Request](evidence/04-wireshark-ls-request.png)
+
+### Link State Update
+
+![Wireshark capture of an OSPF Link State Update](evidence/05-wireshark-ls-update.png)
+
+### Link State Acknowledgment
+
+![Wireshark capture of an OSPF Link State Acknowledgment](evidence/06-wireshark-ls-acknowledgment.png)
+
+### Final neighbor state
+
+![Final OSPF neighbor table showing FULL adjacency](evidence/07-final-full-adjacency.png)
+
+### Final routing table
+
+![Final routing table showing OSPF-learned routes](evidence/08-final-routing-table.png)
+
+### Final OSPF database
+
+![Final OSPF database after convergence](evidence/09-final-ospf-database.png)

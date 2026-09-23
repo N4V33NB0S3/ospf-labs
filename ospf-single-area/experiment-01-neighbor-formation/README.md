@@ -95,7 +95,3 @@ Evidence: [FULL adjacency](evidence/07-final-full-adjacency.png) · [OSPF routes
 ## Takeaway
 
 `clear ip ospf process` reset the OSPF state and caused the established adjacencies to drop. OSPF then rebuilt neighbor relationships, synchronized database summaries, requested and received missing LSAs, acknowledged the updates, and returned the neighbors to FULL. The Cisco debug and packet capture show complementary views of this process: internal state changes on R1 and the OSPF packets exchanged on the link.
-
-## Source note
-
-The referenced `Observation notes.txt` was not available among the conversation attachments or in the provided workspace when this folder was prepared. This README therefore uses the uploaded topology and screenshots plus the packet findings recorded in the referenced conversation. Confirm or amend the prose against the original notes before publishing if they contain additional observations.

@@ -95,7 +95,7 @@ Trace the Area 1 prefix `44.44.45.45/32` from R4 across the Area 0/Area 1 bounda
 
 R4's Loopback11 provides `44.44.45.45/32` in Area 1. On the R2–R1 Area 0 link, Wireshark captured an OSPF LS Update from R2 (`10.0.12.2`) to `224.0.0.5` containing a Type-3 Summary-LSA.
 
-![Wireshark LS Update carrying the Type-3 LSA](02 -wireshark-type3-lsu.png)
+![Wireshark LS Update carrying the Type-3 LSA](02%20-wireshark-type3-lsu.png)
 
 The expanded LSA fields show:
 
@@ -108,7 +108,7 @@ The expanded LSA fields show:
 
 ![Expanded Type-3 Summary-LSA fields in Wireshark](03-wireshark-type3-details.png)
 
-R4's Area 1 Router-LSA is the source-side evidence for the prefix:
+The R4 Type-1 capture provides baseline context before Loopback11 was added; it shows the existing `44.44.44.44/32` stub, while this experiment tracks the separate `44.44.45.45/32` prefix:
 
 ![R4 Type-1 Router-LSA before the Type-3 capture](01-r4-type1-before.png)
 
@@ -116,11 +116,11 @@ R4's Area 1 Router-LSA is the source-side evidence for the prefix:
 
 R2's Area 0 summary-LSA database entry matches the packet: Link State ID `44.44.45.45`, Advertising Router `2.2.2.2`, mask `/32`, and metric `2`.
 
-![R2 Area 0 Type-3 summary-LSA database entry](04 - r2-summary-lsa.png)
+![R2 Area 0 Type-3 summary-LSA database entry](04%20-%20r2-summary-lsa.png)
 
 R1's summary-LSA database shows the same Type-3 LSA, confirming that it was flooded across Area 0 to R1.
 
-![R1 Type-3 summary-LSA database entry](05 - r1-summary-lsa.png)
+![R1 Type-3 summary-LSA database entry](05%20-%20r1-summary-lsa.png)
 
 ### R1 inter-area route
 
@@ -130,7 +130,7 @@ R1 installs the prefix as an OSPF inter-area route via R2:
 O IA 44.44.45.45/32 [110/3] via 10.0.12.2
 ```
 
-![R1 inter-area route for 44.44.45.45/32](06 - r1-inter-area-route.png)
+![R1 inter-area route for 44.44.45.45/32](06%20-%20r1-inter-area-route.png)
 
 ![R1 OSPF O IA route details for 44.44.45.45/32](06-ospf-O-IA-route.png)
 
@@ -161,6 +161,7 @@ R2's Type-3 is flushed at MaxAge (LS Age 3600)
         ↓
 R1 no longer has the subnet in its routing table
 ```
+
 
 
 

@@ -130,7 +130,9 @@ R1 installs the prefix as an OSPF inter-area route via R2:
 O IA 44.44.45.45/32 [110/3] via 10.0.12.2
 ```
 
-![R1 inter-area route for 44.44.45.45/32](06-ospf-O-IA-route.png)
+![R1 inter-area route for 44.44.45.45/32](06 - r1-inter-area-route.png)
+
+![R1 OSPF O IA route details for 44.44.45.45/32](06-ospf-O-IA-route.png)
 
 The Type-3 LSA metric is `2`; R1's displayed route metric is `3`.
 
@@ -159,4 +161,6 @@ R2's Type-3 is flushed at MaxAge (LS Age 3600)
         ↓
 R1 no longer has the subnet in its routing table
 ```
+
+
 

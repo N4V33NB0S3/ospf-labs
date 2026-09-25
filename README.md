@@ -1,6 +1,6 @@
 # OSPF Labs
 
-## OSPF Single Area
+## OSPF Single Area & Multi Area
 
 - [Experiment 01: Neighbor formation after process reset](ospf-single-area/experiment-01-neighbor-formation/README.md)
 

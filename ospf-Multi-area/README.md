@@ -1,6 +1,6 @@
 # Multi-Area OSPF LSA Investigation
 
-This lab records packet-level observations from a five-router, multi-area OSPF topology. This write-up documents **Experiment 1: a Type-1 Router-LSA change** only.
+This lab records packet-level observations from a five-router, multi-area OSPF topology. It documents a Type-1 Router-LSA change and a Type-3 Summary-LSA advertisement and withdrawal.
 
 ## Topology context
 
@@ -85,6 +85,78 @@ R4 sends an LS Update; R2 acknowledges it
 R2's routing table contains O 44.44.44.44/32 via 10.0.24.2
 ```
 
-## Next experiment
+## Experiment 2 — Type-3 Summary-LSA
 
-**Placeholder — Type-3 Summary-LSA investigation.** Add the captured evidence and observations after the next experiment is performed. No Type-2 or Type-3 analysis is included yet.
+### Objective
+
+Trace the Area 1 prefix `44.44.45.45/32` from R4 across the Area 0/Area 1 boundary. The evidence shows R2, the ABR, originating a Type-3 Summary-LSA into Area 0, R1 receiving that LSA, and R1 installing an inter-area route.
+
+### Source prefix and Area 0 LS Update
+
+R4's Loopback11 provides `44.44.45.45/32` in Area 1. On the R2–R1 Area 0 link, Wireshark captured an OSPF LS Update from R2 (`10.0.12.2`) to `224.0.0.5` containing a Type-3 Summary-LSA.
+
+![Wireshark LS Update carrying the Type-3 LSA](02 -wireshark-type3-lsu.png)
+
+The expanded LSA fields show:
+
+- LS Type: Summary-LSA (`3`)
+- Link State ID: `44.44.45.45`
+- Advertising Router: `2.2.2.2` (R2)
+- Sequence number: `0x80000001`
+- Network mask: `255.255.255.255` (`/32`)
+- Metric: `2`
+
+![Expanded Type-3 Summary-LSA fields in Wireshark](03-wireshark-type3-details.png)
+
+R4's Area 1 Router-LSA is the source-side evidence for the prefix:
+
+![R4 Type-1 Router-LSA before the Type-3 capture](01-r4-type1-before.png)
+
+### R2 and R1 LSDB confirmation
+
+R2's Area 0 summary-LSA database entry matches the packet: Link State ID `44.44.45.45`, Advertising Router `2.2.2.2`, mask `/32`, and metric `2`.
+
+![R2 Area 0 Type-3 summary-LSA database entry](04 - r2-summary-lsa.png)
+
+R1's summary-LSA database shows the same Type-3 LSA, confirming that it was flooded across Area 0 to R1.
+
+![R1 Type-3 summary-LSA database entry](05 - r1-summary-lsa.png)
+
+### R1 inter-area route
+
+R1 installs the prefix as an OSPF inter-area route via R2:
+
+```text
+O IA 44.44.45.45/32 [110/3] via 10.0.12.2
+```
+
+![R1 inter-area route for 44.44.45.45/32](06-ospf-O-IA-route.png)
+
+The Type-3 LSA metric is `2`; R1's displayed route metric is `3`.
+
+### Withdrawal observation — MaxAge flush
+
+After R4's Loopback11 was shut down, Wireshark captured the Type-3 LSA for `44.44.45.45/32` with LS Age `3600` (MaxAge), sequence number `0x80000004`, and metric `16777215`.
+
+![Type-3 LSA at MaxAge after Loopback11 shutdown](07-type3-withdrawal.png)
+
+OSPF does not send a separate packet literally named “withdraw.” The captured MaxAge LSA is the Type-3 flush used to remove the now-unreachable summary from the link-state domain. R1's follow-up lookup reported `% Subnet not in table`, showing that the inter-area route was removed.
+
+![R1 reports that the subnet is no longer in the routing table](08-r1-route-removed.png)
+
+### Experiment 2 result
+
+```text
+R4 advertises 44.44.45.45/32 in Area 1
+        ↓
+R2 originates a Type-3 Summary-LSA into Area 0
+        ↓
+R1 receives the matching Type-3 LSA and installs O IA via 10.0.12.2
+        ↓
+R4 Loopback11 is shut down
+        ↓
+R2's Type-3 is flushed at MaxAge (LS Age 3600)
+        ↓
+R1 no longer has the subnet in its routing table
+```
+
